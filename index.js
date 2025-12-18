@@ -32,6 +32,7 @@ async function run() {
     const userCollection = db.collection("users");
     const activeDonorCollection = db.collection("activeDonors");
     const volunteerCollection = db.collection("volunteers");
+    const requestCollection = db.collection("requests");
 
     // create user
     app.post("/users", async (req, res) => {
@@ -185,6 +186,74 @@ async function run() {
         res.send({ message: "Volunteer deleted" });
       } catch (err) {
         res.status(500).send({ error: "Failed to delete volunteer" });
+      }
+    });
+
+    const { ObjectId } = require("mongodb"); // Add this at the top
+
+    /* =====================================================
+   REQUEST API
+===================================================== */
+
+    // Create a new request
+    app.post("/requests", async (req, res) => {
+      try {
+        const request = req.body;
+
+        const result = await requestCollection.insertOne({
+          ...request,
+          createdAt: new Date(),
+        });
+
+        res.send({ message: "Request created", result });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to create request" });
+      }
+    });
+
+    // Get all requests
+    app.get("/requests", async (req, res) => {
+      try {
+        const requests = await requestCollection.find().toArray();
+        res.send(requests);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to fetch requests" });
+      }
+    });
+
+    // Get all requests by requester email
+    app.get("/requests/user/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const userRequests = await requestCollection
+          .find({ requesterEmail: email })
+          .toArray();
+        res.send(userRequests);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to fetch requests for user" });
+      }
+    });
+
+    // Delete request by id
+    app.delete("/requests/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        const result = await requestCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res.send({ message: "Request not found" });
+        }
+
+        res.send({ message: "Request deleted" });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to delete request" });
       }
     });
 
