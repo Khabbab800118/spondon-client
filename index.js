@@ -329,6 +329,20 @@ async function run() {
           .send({ error: "Failed to fetch approved requests for donor" });
       }
     });
+    app.get("/approved-requests/volunteer/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const requests = await approvedRequestsCollection
+          .find({ requesterEmail: email })
+          .toArray();
+        res.send(requests);
+      } catch (err) {
+        console.error(err);
+        res
+          .status(500)
+          .send({ error: "Failed to fetch approved requests for donor" });
+      }
+    });
 
     // ================= CONNECTION CHECK =================
     await client.db("admin").command({ ping: 1 });
