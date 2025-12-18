@@ -25,6 +25,7 @@ async function run() {
 
     const db = client.db("spondon-db");
     const userCollection = db.collection("users");
+    const activeDonorCollection = db.collection("activeDonors");
 
     // create user
     app.post("/users", async (req, res) => {
@@ -39,11 +40,57 @@ async function run() {
         res.send(result);
       }
     });
+    // get all users
+    app.get("/users", async (req, res) => {
+      const result = await userCollection.find().toArray();
+      res.send(result);
+    });
     // get user by email
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
       const user = await userCollection.findOne({ email });
       res.send(user);
+    });
+
+    // Add donor to activeDonors
+    app.post("/active-donors", async (req, res) => {
+      try {
+        const donor = req.body; // Expect full donor info
+        const existing = await activeDonorCollection.findOne({
+          email: donor.email,
+        });
+
+        if (existing) {
+          return res.send({ message: "Donor already active" });
+        }
+
+        const result = await activeDonorCollection.insertOne(donor);
+        res.send({ message: "Donor marked as active", result });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to add active donor" });
+      }
+    });
+
+    // get active donors
+    app.get("/active-donors", async (req, res) => {
+      const result = await activeDonorCollection.find().toArray();
+      res.send(result);
+    });
+
+    // Remove donor from activeDonors
+    app.delete("/active-donors/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const result = await activeDonorCollection.deleteOne({ email });
+        if (result.deletedCount === 0) {
+          return res.send({ message: "Donor not found in active list" });
+        }
+        res.send({ message: "Donor marked as inactive" });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to remove active donor" });
+      }
     });
 
     // create
