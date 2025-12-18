@@ -33,6 +33,7 @@ async function run() {
     const activeDonorCollection = db.collection("activeDonors");
     const volunteerCollection = db.collection("volunteers");
     const requestCollection = db.collection("requests");
+    const approvedRequestsCollection = db.collection("approvedRequests");
 
     // create user
     app.post("/users", async (req, res) => {
@@ -222,6 +223,22 @@ async function run() {
         res.status(500).send({ error: "Failed to fetch requests" });
       }
     });
+    // get req by bloodgroup
+    app.get("/requests", async (req, res) => {
+      try {
+        const { bloodGroup } = req.query;
+
+        const query = {};
+        if (bloodGroup) {
+          query.bloodGroup = bloodGroup;
+        }
+
+        const requests = await requestCollection.find(query).toArray();
+        res.send(requests);
+      } catch (error) {
+        res.status(500).send({ error: "Failed to fetch requests" });
+      }
+    });
 
     // Get all requests by requester email
     app.get("/requests/user/:email", async (req, res) => {
@@ -254,6 +271,62 @@ async function run() {
       } catch (err) {
         console.error(err);
         res.status(500).send({ error: "Failed to delete request" });
+      }
+    });
+
+    app.get("/requests", async (req, res) => {
+      const email = req.query.email;
+      const result = await requestCollection
+        .find({ requesterEmail: email })
+        .toArray();
+      res.send(result);
+    });
+
+    // approved request api
+    app.patch("/requests/approve/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const request = await requestCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        if (!request)
+          return res.status(404).send({ message: "Request not found" });
+        const approvedRequest = {
+          ...request,
+          approvedAt: new Date(),
+          status: "approved",
+        };
+        await approvedRequestsCollection.insertOne(approvedRequest);
+        await requestCollection.deleteOne({ _id: new ObjectId(id) });
+        res.send({ message: "Request approved successfully", approvedRequest });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to approve request" });
+      }
+    });
+
+    app.get("/approved-requests", async (req, res) => {
+      try {
+        const requests = await approvedRequestsCollection.find().toArray();
+        res.send(requests);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to fetch approved requests" });
+      }
+    });
+
+    app.get("/approved-requests/donor/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const requests = await approvedRequestsCollection
+          .find({ donorEmail: email })
+          .toArray();
+        res.send(requests);
+      } catch (err) {
+        console.error(err);
+        res
+          .status(500)
+          .send({ error: "Failed to fetch approved requests for donor" });
       }
     });
 
