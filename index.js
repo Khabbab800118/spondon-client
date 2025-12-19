@@ -1,20 +1,21 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
+const { MongoClient, ObjectId, ServerApiVersion } = require("mongodb");
 
 const app = express();
 const port = process.env.PORT || 5000;
-
-const { MongoClient, ServerApiVersion } = require("mongodb");
 
 // ================= MIDDLEWARE =================
 app.use(cors());
 app.use(express.json());
 
 // ================= MONGODB =================
-const uri =
-  process.env.MONGODB_URI ||
-  "mongodb+srv://spondon_db_user:7W9LFIDfDz9YcEMK@cluster0.iavbr3y.mongodb.net/?appName=Cluster0";
+const uri = process.env.MONGODB_URI;
+if (!uri) {
+  console.error("❌ MongoDB URI is not defined in environment variables");
+  process.exit(1);
+}
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -27,6 +28,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     await client.connect();
+    console.log("✅ MongoDB connected successfully");
 
     const db = client.db("spondon-db");
     const userCollection = db.collection("users");
@@ -35,72 +37,86 @@ async function run() {
     const requestCollection = db.collection("requests");
     const approvedRequestsCollection = db.collection("approvedRequests");
 
-    // create user
+    // ================= USERS =================
+
+    // Create a user
     app.post("/users", async (req, res) => {
-      const user = req.body;
-      const existing = await userCollection.findOne({ email: user.email });
+      try {
+        const user = req.body;
+        const existing = await userCollection.findOne({ email: user.email });
+        if (existing) return res.send({ message: "User already exists" });
 
-      if (existing) {
-        return res.send({ message: "User already exists" });
+        const result = await userCollection.insertOne(user);
+        res.send(result);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to create user" });
       }
-
-      const result = await userCollection.insertOne(user);
-      res.send(result);
     });
 
-    // get all users
+    // Get all users
     app.get("/users", async (req, res) => {
-      const users = await userCollection.find().toArray();
-      res.send(users);
+      try {
+        const users = await userCollection.find().toArray();
+        res.send(users);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to fetch users" });
+      }
     });
 
-    // get user by email
+    // Get user by email
     app.get("/users/:email", async (req, res) => {
-      const email = req.params.email;
-      const user = await userCollection.findOne({ email });
-      res.send(user);
+      try {
+        const email = req.params.email;
+        const user = await userCollection.findOne({ email });
+        res.send(user);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to fetch user" });
+      }
     });
 
-    // delete user
+    // Delete user
     app.delete("/users/:id", async (req, res) => {
-      const { id } = req.params;
-
-      const result = await userCollection.deleteOne({
-        _id: new ObjectId(id),
-      });
-
-      res.send(result);
+      try {
+        const { id } = req.params;
+        const result = await userCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        res.send(result);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to delete user" });
+      }
     });
 
-    // update user
+    // Update user (enable/disable)
     app.patch("/users/:id", async (req, res) => {
-      const { id } = req.params;
-      const { isDisabled } = req.body;
-
-      const result = await userCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { isDisabled } }
-      );
-
-      res.send(result);
+      try {
+        const { id } = req.params;
+        const { isDisabled } = req.body;
+        const result = await userCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { isDisabled } }
+        );
+        res.send(result);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to update user" });
+      }
     });
 
-    /* =====================================================
-       ACTIVE DONOR API
-    ===================================================== */
+    // ================= ACTIVE DONORS =================
 
-    // activate donor
+    // Activate donor
     app.post("/active-donors", async (req, res) => {
       try {
         const donor = req.body;
-
         const exists = await activeDonorCollection.findOne({
           email: donor.email,
         });
-
-        if (exists) {
-          return res.send({ message: "Donor already active" });
-        }
+        if (exists) return res.send({ message: "Donor already active" });
 
         const result = await activeDonorCollection.insertOne({
           ...donor,
@@ -109,71 +125,67 @@ async function run() {
 
         res.send({ message: "Donor activated", result });
       } catch (err) {
+        console.error(err);
         res.status(500).send({ error: "Failed to activate donor" });
       }
     });
 
-    // get all active donors
+    // Get all active donors
     app.get("/active-donors", async (req, res) => {
-      const donors = await activeDonorCollection.find().toArray();
-      res.send(donors);
+      try {
+        const donors = await activeDonorCollection.find().toArray();
+        res.send(donors);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to fetch donors" });
+      }
     });
 
-    // Get individual active donor details + check active status
+    // Get individual donor by email
     app.get("/active-donors/:email", async (req, res) => {
       try {
         const email = req.params.email;
         const donor = await activeDonorCollection.findOne({ email });
-
-        if (!donor) {
-          // If donor not found, return isActive: false
+        if (!donor)
           return res
             .status(404)
             .send({ message: "Donor not found", isActive: false });
-        }
-
-        // Donor exists
         res.send({ ...donor, isActive: true });
       } catch (err) {
+        console.error(err);
         res.status(500).send({ error: "Failed to fetch donor details" });
       }
     });
 
-    // deactivate donor
+    // Deactivate donor
     app.delete("/active-donors/:email", async (req, res) => {
       try {
         const email = req.params.email;
         const result = await activeDonorCollection.deleteOne({ email });
-
-        if (result.deletedCount === 0) {
+        if (result.deletedCount === 0)
           return res.send({ message: "Donor not found" });
-        }
-
         res.send({ message: "Donor deactivated" });
       } catch (err) {
+        console.error(err);
         res.status(500).send({ error: "Failed to deactivate donor" });
       }
     });
 
-    // volunteer api
-    // add volunteer
+    // ================= VOLUNTEERS =================
+
+    // Add volunteer
     app.post("/volunteers", async (req, res) => {
       try {
         const volunteer = req.body;
-
         const exists = await volunteerCollection.findOne({
           email: volunteer.email,
         });
-
-        if (exists) {
-          return res.send({ message: "Volunteer already exists" });
-        }
+        if (exists) return res.send({ message: "Volunteer already exists" });
 
         const result = await volunteerCollection.insertOne({
           ...volunteer,
           joinedAt: new Date(),
         });
-
         res.send({ message: "Volunteer added", result });
       } catch (err) {
         console.error(err);
@@ -181,55 +193,50 @@ async function run() {
       }
     });
 
-    // get all volunteers
+    // Get all volunteers
     app.get("/volunteers", async (req, res) => {
-      const volunteers = await volunteerCollection.find().toArray();
-      res.send(volunteers);
+      try {
+        const volunteers = await volunteerCollection.find().toArray();
+        res.send(volunteers);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to fetch volunteers" });
+      }
     });
 
-    // get volunteer by email
+    // Get volunteer by email
     app.get("/volunteers/:email", async (req, res) => {
       try {
         const email = req.params.email;
         const volunteer = await volunteerCollection.findOne({ email });
         res.send(volunteer);
       } catch (err) {
-        res.status(500).send({ error: "Failed to get volunteer" });
+        console.error(err);
+        res.status(500).send({ error: "Failed to fetch volunteer" });
       }
     });
 
-    // delete volunteer
+    // Delete volunteer
     app.delete("/volunteers/:email", async (req, res) => {
       try {
         const email = req.params.email;
         const result = await volunteerCollection.deleteOne({ email });
-
-        if (result.deletedCount === 0) {
+        if (result.deletedCount === 0)
           return res.send({ message: "Volunteer not found" });
-        }
-
         res.send({ message: "Volunteer deleted" });
       } catch (err) {
+        console.error(err);
         res.status(500).send({ error: "Failed to delete volunteer" });
       }
     });
 
-    const { ObjectId } = require("mongodb"); // Add this at the top
+    // ================= REQUESTS =================
 
-    /* =====================================================
-   REQUEST API
-===================================================== */
-
-    // Create a new request
+    // Create request
     app.post("/requests", async (req, res) => {
       try {
-        const request = req.body;
-
-        const result = await requestCollection.insertOne({
-          ...request,
-          createdAt: new Date(),
-        });
-
+        const request = { ...req.body, createdAt: new Date() };
+        const result = await requestCollection.insertOne(request);
         res.send({ message: "Request created", result });
       } catch (err) {
         console.error(err);
@@ -240,57 +247,28 @@ async function run() {
     // Get all requests
     app.get("/requests", async (req, res) => {
       try {
-        const requests = await requestCollection.find().toArray();
-        res.send(requests);
-      } catch (err) {
-        console.error(err);
-        res.status(500).send({ error: "Failed to fetch requests" });
-      }
-    });
-    // get req by bloodgroup
-    app.get("/requests", async (req, res) => {
-      try {
-        const { bloodGroup } = req.query;
-
+        const { bloodGroup, email } = req.query;
         const query = {};
-        if (bloodGroup) {
-          query.bloodGroup = bloodGroup;
-        }
+        if (bloodGroup) query.bloodGroup = bloodGroup;
+        if (email) query.requesterEmail = email;
 
         const requests = await requestCollection.find(query).toArray();
         res.send(requests);
-      } catch (error) {
+      } catch (err) {
+        console.error(err);
         res.status(500).send({ error: "Failed to fetch requests" });
       }
     });
 
-    // Get all requests by requester email
-    app.get("/requests/user/:email", async (req, res) => {
-      try {
-        const email = req.params.email;
-        const userRequests = await requestCollection
-          .find({ requesterEmail: email })
-          .toArray();
-        res.send(userRequests);
-      } catch (err) {
-        console.error(err);
-        res.status(500).send({ error: "Failed to fetch requests for user" });
-      }
-    });
-
-    // Delete request by id
+    // Delete request
     app.delete("/requests/:id", async (req, res) => {
       try {
         const id = req.params.id;
-
         const result = await requestCollection.deleteOne({
           _id: new ObjectId(id),
         });
-
-        if (result.deletedCount === 0) {
+        if (result.deletedCount === 0)
           return res.send({ message: "Request not found" });
-        }
-
         res.send({ message: "Request deleted" });
       } catch (err) {
         console.error(err);
@@ -298,17 +276,7 @@ async function run() {
       }
     });
 
-    app.get("/requests", async (req, res) => {
-      const email = req.query.email;
-      const result = await requestCollection
-        .find({ requesterEmail: email })
-        .toArray();
-      res.send(result);
-    });
-
-    // -----------------------------------------
-    // approved request api *****************
-
+    // Approve request
     app.patch("/requests/approve/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -317,6 +285,7 @@ async function run() {
         });
         if (!request)
           return res.status(404).send({ message: "Request not found" });
+
         const approvedRequest = {
           ...request,
           approvedAt: new Date(),
@@ -324,12 +293,15 @@ async function run() {
         };
         await approvedRequestsCollection.insertOne(approvedRequest);
         await requestCollection.deleteOne({ _id: new ObjectId(id) });
+
         res.send({ message: "Request approved successfully", approvedRequest });
       } catch (err) {
         console.error(err);
         res.status(500).send({ error: "Failed to approve request" });
       }
     });
+
+    // ================= APPROVED REQUESTS =================
 
     app.get("/approved-requests", async (req, res) => {
       try {
@@ -352,9 +324,10 @@ async function run() {
         console.error(err);
         res
           .status(500)
-          .send({ error: "Failed to fetch approved requests for donor" });
+          .send({ error: "Failed to fetch donor's approved requests" });
       }
     });
+
     app.get("/approved-requests/volunteer/:email", async (req, res) => {
       try {
         const email = req.params.email;
@@ -366,35 +339,28 @@ async function run() {
         console.error(err);
         res
           .status(500)
-          .send({ error: "Failed to fetch approved requests for donor" });
+          .send({ error: "Failed to fetch volunteer's approved requests" });
       }
     });
+
     app.delete("/approved-requests/:id", async (req, res) => {
       try {
         const { id } = req.params;
-
         const result = await approvedRequestsCollection.deleteOne({
           _id: new ObjectId(id),
         });
-
-        if (result.deletedCount === 0) {
+        if (result.deletedCount === 0)
           return res
             .status(404)
             .send({ message: "Approved request not found" });
-        }
-
         res.send({ message: "Approved request deleted successfully" });
       } catch (err) {
         console.error(err);
         res.status(500).send({ error: "Failed to delete approved request" });
       }
     });
-
-    // ================= CONNECTION CHECK =================
-    await client.db("admin").command({ ping: 1 });
-    console.log("✅ MongoDB connected successfully");
   } finally {
-    // keep connection alive
+    // Keep connection alive
   }
 }
 
