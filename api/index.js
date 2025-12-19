@@ -1,8 +1,8 @@
+// api/index.js
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ObjectId, ServerApiVersion } = require("mongodb");
-const serverless = require("serverless-http");
 
 const app = express();
 app.use(cors());
@@ -23,22 +23,12 @@ const client = new MongoClient(uri, {
   },
 });
 
+// Collections
 let userCollection,
   activeDonorCollection,
   volunteerCollection,
   requestCollection,
   approvedRequestsCollection;
-
-async function connectDB() {
-  if (!client.isConnected()) await client.connect();
-  const db = client.db("spondon-db");
-  userCollection = db.collection("users");
-  activeDonorCollection = db.collection("activeDonors");
-  volunteerCollection = db.collection("volunteers");
-  requestCollection = db.collection("requests");
-  approvedRequestsCollection = db.collection("approvedRequests");
-  console.log("✅ MongoDB connected");
-}
 
 // ================= ROUTES =================
 app.get("/", (req, res) => {
@@ -48,7 +38,6 @@ app.get("/", (req, res) => {
 // -------- USERS --------
 app.post("/users", async (req, res) => {
   try {
-    await connectDB();
     const user = req.body;
     const existing = await userCollection.findOne({ email: user.email });
     if (existing) return res.send({ message: "User already exists" });
@@ -62,7 +51,6 @@ app.post("/users", async (req, res) => {
 
 app.get("/users", async (req, res) => {
   try {
-    await connectDB();
     const users = await userCollection.find().toArray();
     res.send(users);
   } catch (err) {
@@ -73,7 +61,6 @@ app.get("/users", async (req, res) => {
 
 app.get("/users/:email", async (req, res) => {
   try {
-    await connectDB();
     const user = await userCollection.findOne({ email: req.params.email });
     res.send(user);
   } catch (err) {
@@ -84,7 +71,6 @@ app.get("/users/:email", async (req, res) => {
 
 app.delete("/users/:id", async (req, res) => {
   try {
-    await connectDB();
     const result = await userCollection.deleteOne({
       _id: new ObjectId(req.params.id),
     });
@@ -97,7 +83,6 @@ app.delete("/users/:id", async (req, res) => {
 
 app.patch("/users/:id", async (req, res) => {
   try {
-    await connectDB();
     const { isDisabled } = req.body;
     const result = await userCollection.updateOne(
       { _id: new ObjectId(req.params.id) },
@@ -113,7 +98,6 @@ app.patch("/users/:id", async (req, res) => {
 // -------- ACTIVE DONORS --------
 app.post("/active-donors", async (req, res) => {
   try {
-    await connectDB();
     const donor = req.body;
     const exists = await activeDonorCollection.findOne({ email: donor.email });
     if (exists) return res.send({ message: "Donor already active" });
@@ -130,7 +114,6 @@ app.post("/active-donors", async (req, res) => {
 
 app.get("/active-donors", async (req, res) => {
   try {
-    await connectDB();
     const donors = await activeDonorCollection.find().toArray();
     res.send(donors);
   } catch (err) {
@@ -141,7 +124,6 @@ app.get("/active-donors", async (req, res) => {
 
 app.get("/active-donors/:email", async (req, res) => {
   try {
-    await connectDB();
     const donor = await activeDonorCollection.findOne({
       email: req.params.email,
     });
@@ -158,7 +140,6 @@ app.get("/active-donors/:email", async (req, res) => {
 
 app.delete("/active-donors/:email", async (req, res) => {
   try {
-    await connectDB();
     const result = await activeDonorCollection.deleteOne({
       email: req.params.email,
     });
@@ -174,7 +155,6 @@ app.delete("/active-donors/:email", async (req, res) => {
 // -------- VOLUNTEERS --------
 app.post("/volunteers", async (req, res) => {
   try {
-    await connectDB();
     const volunteer = req.body;
     const exists = await volunteerCollection.findOne({
       email: volunteer.email,
@@ -193,7 +173,6 @@ app.post("/volunteers", async (req, res) => {
 
 app.get("/volunteers", async (req, res) => {
   try {
-    await connectDB();
     const volunteers = await volunteerCollection.find().toArray();
     res.send(volunteers);
   } catch (err) {
@@ -204,7 +183,6 @@ app.get("/volunteers", async (req, res) => {
 
 app.get("/volunteers/:email", async (req, res) => {
   try {
-    await connectDB();
     const volunteer = await volunteerCollection.findOne({
       email: req.params.email,
     });
@@ -217,7 +195,6 @@ app.get("/volunteers/:email", async (req, res) => {
 
 app.delete("/volunteers/:email", async (req, res) => {
   try {
-    await connectDB();
     const result = await volunteerCollection.deleteOne({
       email: req.params.email,
     });
@@ -233,7 +210,6 @@ app.delete("/volunteers/:email", async (req, res) => {
 // -------- REQUESTS --------
 app.post("/requests", async (req, res) => {
   try {
-    await connectDB();
     const request = { ...req.body, createdAt: new Date() };
     const result = await requestCollection.insertOne(request);
     res.send({ message: "Request created", result });
@@ -245,7 +221,6 @@ app.post("/requests", async (req, res) => {
 
 app.get("/requests", async (req, res) => {
   try {
-    await connectDB();
     const { bloodGroup, email } = req.query;
     const query = {};
     if (bloodGroup) query.bloodGroup = bloodGroup;
@@ -260,7 +235,6 @@ app.get("/requests", async (req, res) => {
 
 app.delete("/requests/:id", async (req, res) => {
   try {
-    await connectDB();
     const result = await requestCollection.deleteOne({
       _id: new ObjectId(req.params.id),
     });
@@ -275,7 +249,6 @@ app.delete("/requests/:id", async (req, res) => {
 
 app.patch("/requests/approve/:id", async (req, res) => {
   try {
-    await connectDB();
     const request = await requestCollection.findOne({
       _id: new ObjectId(req.params.id),
     });
@@ -299,7 +272,6 @@ app.patch("/requests/approve/:id", async (req, res) => {
 // -------- APPROVED REQUESTS --------
 app.get("/approved-requests", async (req, res) => {
   try {
-    await connectDB();
     const requests = await approvedRequestsCollection.find().toArray();
     res.send(requests);
   } catch (err) {
@@ -310,7 +282,6 @@ app.get("/approved-requests", async (req, res) => {
 
 app.get("/approved-requests/donor/:email", async (req, res) => {
   try {
-    await connectDB();
     const requests = await approvedRequestsCollection
       .find({ donorEmail: req.params.email })
       .toArray();
@@ -325,7 +296,6 @@ app.get("/approved-requests/donor/:email", async (req, res) => {
 
 app.get("/approved-requests/volunteer/:email", async (req, res) => {
   try {
-    await connectDB();
     const requests = await approvedRequestsCollection
       .find({ requesterEmail: req.params.email })
       .toArray();
@@ -340,7 +310,6 @@ app.get("/approved-requests/volunteer/:email", async (req, res) => {
 
 app.delete("/approved-requests/:id", async (req, res) => {
   try {
-    await connectDB();
     const result = await approvedRequestsCollection.deleteOne({
       _id: new ObjectId(req.params.id),
     });
@@ -353,6 +322,24 @@ app.delete("/approved-requests/:id", async (req, res) => {
   }
 });
 
-// ================= EXPORT FOR VERCEL =================
-module.exports = app;
-module.exports.handler = serverless(app);
+// ================= START SERVER =================
+async function startServer() {
+  try {
+    await client.connect();
+    console.log("✅ MongoDB connected");
+
+    const db = client.db("spondon-db");
+    userCollection = db.collection("users");
+    activeDonorCollection = db.collection("activeDonors");
+    volunteerCollection = db.collection("volunteers");
+    requestCollection = db.collection("requests");
+    approvedRequestsCollection = db.collection("approvedRequests");
+
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  } catch (err) {
+    console.error("❌ Failed to connect to MongoDB:", err);
+  }
+}
+
+startServer();
