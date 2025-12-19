@@ -61,6 +61,30 @@ async function run() {
       res.send(user);
     });
 
+    // delete user
+    app.delete("/users/:id", async (req, res) => {
+      const { id } = req.params;
+
+      const result = await userCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+
+      res.send(result);
+    });
+
+    // update user
+    app.patch("/users/:id", async (req, res) => {
+      const { id } = req.params;
+      const { isDisabled } = req.body;
+
+      const result = await userCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { isDisabled } }
+      );
+
+      res.send(result);
+    });
+
     /* =====================================================
        ACTIVE DONOR API
     ===================================================== */
@@ -282,7 +306,9 @@ async function run() {
       res.send(result);
     });
 
-    // approved request api
+    // -----------------------------------------
+    // approved request api *****************
+
     app.patch("/requests/approve/:id", async (req, res) => {
       try {
         const id = req.params.id;
@@ -341,6 +367,26 @@ async function run() {
         res
           .status(500)
           .send({ error: "Failed to fetch approved requests for donor" });
+      }
+    });
+    app.delete("/approved-requests/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const result = await approvedRequestsCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res
+            .status(404)
+            .send({ message: "Approved request not found" });
+        }
+
+        res.send({ message: "Approved request deleted successfully" });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Failed to delete approved request" });
       }
     });
 
