@@ -23,12 +23,13 @@ const client = new MongoClient(uri, {
   },
 });
 
-// Collections
+// ================= COLLECTIONS =================
 let userCollection,
   activeDonorCollection,
   volunteerCollection,
   requestCollection,
-  approvedRequestsCollection;
+  approvedRequestsCollection,
+  canceledRequestsCollection;
 
 // ================= ROUTES =================
 app.get("/", (req, res) => {
@@ -322,6 +323,41 @@ app.delete("/approved-requests/:id", async (req, res) => {
   }
 });
 
+// Add a request to canceledRequestCollection
+app.post("/canceled-requests", async (req, res) => {
+  try {
+    const canceledRequest = req.body;
+
+    // Optional: prevent duplicate cancel using _id
+    const existing = await canceledRequestsCollection.findOne({
+      _id: canceledRequest._id,
+    });
+
+    if (existing) {
+      return res.send({ message: "Request already canceled" });
+    }
+
+    canceledRequest.canceledAt = new Date();
+
+    const result = await canceledRequestsCollection.insertOne(canceledRequest);
+    res.send({ message: "Request canceled successfully", result });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ error: "Failed to cancel request" });
+  }
+});
+
+// get all canceled requests
+app.get("/canceled-requests", async (req, res) => {
+  try {
+    const canceledRequests = await canceledRequestsCollection.find().toArray();
+    res.send(canceledRequests);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ error: "Failed to fetch canceled requests" });
+  }
+});
+
 // ================= START SERVER =================
 async function startServer() {
   try {
@@ -334,6 +370,7 @@ async function startServer() {
     volunteerCollection = db.collection("volunteers");
     requestCollection = db.collection("requests");
     approvedRequestsCollection = db.collection("approvedRequests");
+    canceledRequestsCollection = db.collection("canceledRequests");
 
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
