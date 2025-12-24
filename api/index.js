@@ -358,6 +358,19 @@ app.get("/canceled-requests", async (req, res) => {
   }
 });
 
+// DELETE a canceled request by ID
+app.delete("/canceled-requests/:id", async (req, res) => {
+  try {
+    const result = await canceledRequestsCollection.deleteOne({
+      _id: new ObjectId(req.params.id),
+    });
+    res.send(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ error: "Failed to delete user" });
+  }
+});
+
 // ================= START SERVER =================
 async function startServer() {
   try {
